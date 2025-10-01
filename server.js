@@ -1,12 +1,16 @@
+require('dotenv').config();
 const express = require('express');
 const puppeteer = require('puppeteer');
 const cors = require('cors');
 const helmet = require('helmet');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ✅ THÊM HELPER FUNCTION NÀY
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// ...existing code...
 // Middleware
 app.use(helmet());
 app.use(cors());
@@ -58,13 +62,15 @@ async function scrapeMatches() {
     
     // Chờ 5 giây để trang load đầy đủ
     console.log('Waiting 5 seconds for page to fully load...');
-    await page.waitForTimeout(5000);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    console.log('Extracting match data...');
     
     // Chờ thêm để đảm bảo JavaScript render xong
     try {
       await page.waitForSelector('div[class*="bg-match-card"], [class*="match"]', { timeout: 10000 });
       console.log('Match elements detected, waiting 2 more seconds...');
-      await page.waitForTimeout(2000);
+      await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (e) {
       console.log('No specific match elements found, proceeding with general scraping...');
     }
