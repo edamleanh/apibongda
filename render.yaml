@@ -1,0 +1,13 @@
+version: 2
+services:
+  - name: xaycon-scraper-api
+    type: web
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/status
+    envVars:
+      - key: NODE_ENV
+        value: production
+    autoDeploy: true

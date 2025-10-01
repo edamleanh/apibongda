@@ -1,0 +1,33 @@
+name: Keep Alive
+
+on:
+  schedule:
+    # Ping every 14 minutes (Render free tier sleeps after 15 minutes)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Ping API Status
+      run: |
+        echo "🏓 Pinging API to keep it alive..."
+        response=$(curl -s -w "%{http_code}" https://xaycon-scraper-api.onrender.com/api/status -o /dev/null)
+        if [ $response -eq 200 ]; then
+          echo "✅ API is alive (HTTP $response)"
+        else
+          echo "❌ API returned HTTP $response"
+          exit 1
+        fi
+        
+    - name: Ping Matches Endpoint
+      run: |
+        echo "⚽ Testing matches endpoint..."
+        response=$(curl -s -w "%{http_code}" https://xaycon-scraper-api.onrender.com/api/matches -o /dev/null)
+        if [ $response -eq 200 ]; then
+          echo "✅ Matches endpoint working (HTTP $response)"
+        else
+          echo "⚠️ Matches endpoint returned HTTP $response"
+        fi
