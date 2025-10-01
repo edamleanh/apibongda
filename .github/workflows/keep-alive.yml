@@ -14,7 +14,7 @@ jobs:
     - name: Ping API Status
       run: |
         echo "🏓 Pinging API to keep it alive..."
-        response=$(curl -s -w "%{http_code}" https://xaycon-scraper-api.onrender.com/api/status -o /dev/null)
+        response=$(curl -s -w "%{http_code}" https://apibongda.onrender.com/api/status -o /dev/null)
         if [ $response -eq 200 ]; then
           echo "✅ API is alive (HTTP $response)"
         else
@@ -25,7 +25,7 @@ jobs:
     - name: Ping Matches Endpoint
       run: |
         echo "⚽ Testing matches endpoint..."
-        response=$(curl -s -w "%{http_code}" https://xaycon-scraper-api.onrender.com/api/matches -o /dev/null)
+        response=$(curl -s -w "%{http_code}" https://apibongda.onrender.com/api/matches -o /dev/null)
         if [ $response -eq 200 ]; then
           echo "✅ Matches endpoint working (HTTP $response)"
         else
