@@ -42,6 +42,10 @@ async function ensureChromeInstalled() {
 // Browser Pool - Global browser instance
 let globalBrowser = null;
 
+// ✅ Cache ThapcamTV link để tránh navigate qua bit.ly mỗi lần
+let cachedThapcamLink = null;
+let linkLastUpdated = null;
+
 // Middleware
 app.use(helmet());
 app.use(cors());
@@ -82,27 +86,25 @@ async function getBrowser() {
   return globalBrowser;
 }
 
-// Main scraping function for ThapcamTV
-async function scrapeMatches() {
+// ✅ Hàm lấy link ThapcamTV từ bit.ly (gọi riêng, không gọi mỗi lần scrape)
+async function getThapcamLink() {
   let page;
   try {
-    console.log('Starting ThapcamTV scrape...');
+    console.log('🔗 Fetching ThapcamTV link from bit.ly/tiengruoi...');
     
     const browser = await getBrowser();
     page = await browser.newPage();
     
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
-    // ===== STEP 1: Navigate to bit.ly/tiengruoi =====
-    console.log('Step 1: Navigating to bit.ly/tiengruoi...');
+    // Navigate to bit.ly
     await page.goto('https://bit.ly/tiengruoi', { 
       waitUntil: 'networkidle0',
       timeout: 30000 
     });
     await wait(3000);
     
-    // ===== STEP 2: Find ThapcamTV link =====
-    console.log('Step 2: Looking for ThapcamTV link...');
+    // Find ThapcamTV link
     await page.waitForSelector('.group-link', { timeout: 10000 });
     
     const thapcamLink = await page.evaluate(() => {
@@ -123,34 +125,76 @@ async function scrapeMatches() {
       throw new Error('ThapcamTV link not found on page');
     }
     
-    console.log('Found ThapcamTV link:', thapcamLink);
+    console.log('✅ Found ThapcamTV link:', thapcamLink);
     
-    // ===== STEP 3: Append /football to URL =====
-    const footballUrl = thapcamLink.endsWith('/') 
-      ? thapcamLink + 'football' 
-      : thapcamLink + '/football';
+    // Cache link và timestamp
+    cachedThapcamLink = thapcamLink;
+    linkLastUpdated = Date.now();
     
-    console.log('Step 3: Navigating to football page:', footballUrl);
+    return thapcamLink;
     
-    // ===== STEP 4: Navigate to football page =====
+  } catch (error) {
+    console.error('❌ Error fetching ThapcamTV link:', error);
+    // Nếu lỗi, vẫn dùng link cũ nếu có
+    return cachedThapcamLink;
+  } finally {
+    if (page) {
+      await page.close();
+    }
+  }
+}
+
+// Main scraping function for ThapcamTV (chỉ scrape data, không lấy link nữa)
+// Main scraping function for ThapcamTV (chỉ scrape data, không lấy link nữa)
+async function scrapeMatches() {
+  let page;
+  try {
+    console.log('Starting ThapcamTV scrape...');
+    
+    // ✅ Kiểm tra xem đã có link chưa
+    if (!cachedThapcamLink) {
+      console.log('⚠️ No cached link, fetching from bit.ly...');
+      await getThapcamLink();
+    }
+    
+    if (!cachedThapcamLink) {
+      throw new Error('Could not get ThapcamTV link');
+    }
+    
+    const browser = await getBrowser();
+    page = await browser.newPage();
+    
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    
+    // ✅ Bỏ qua Step 1 & 2 (đã có link rồi), đi thẳng vào football page
+    const footballUrl = cachedThapcamLink.endsWith('/') 
+      ? cachedThapcamLink + 'football' 
+      : cachedThapcamLink + '/football';
+    
+    console.log('🏈 Navigating directly to football page:', footballUrl);
+    
+    // Navigate to football page
     await page.goto(footballUrl, { 
       waitUntil: 'networkidle0',
       timeout: 30000 
     });
     
-    console.log('Step 4: Waiting for football page to load...');
+    console.log('⏳ Waiting for football page to load...');
+    await wait(5000);
+    
+    console.log('⏳ Waiting for football page to load...');
     await wait(5000);
     
     // Wait for match elements
     try {
       await page.waitForSelector('ul.tourz', { timeout: 10000 });
-      console.log('Match list detected, waiting 2 more seconds...');
+      console.log('✅ Match list detected, waiting 2 more seconds...');
       await wait(2000);
     } catch (e) {
-      console.log('No match list found, page might be empty');
+      console.log('⚠️ No match list found, page might be empty');
     }
     
-    console.log('Step 5: Extracting LIVE match data from ThapcamTV...');
+    console.log('📊 Extracting LIVE match data from ThapcamTV...');
     
     // ===== STEP 5: Scrape LIVE matches =====
     const matches = await page.evaluate(() => {
@@ -448,14 +492,25 @@ async function startServer() {
     
     await ensureChromeInstalled();
     
-    console.log('📊 Initial data fetch...');
+    console.log('� Fetching initial ThapcamTV link...');
+    await getThapcamLink();
+    
+    console.log('�📊 Initial data fetch...');
     await updateData();
     
-    // Update every 2 minutes
-    setInterval(updateData, 2 * 60 * 1000);
+    // ✅ TÁCH RIÊNG 2 INTERVAL ĐỂ TỐI ƯU
     
-    // Memory check every 5 minutes
+    // 1. Cập nhật dữ liệu matches: Mỗi 2 phút (chỉ scrape, không lấy link)
+    setInterval(updateData, 2 * 60 * 1000);
+    console.log('⏱️ Match data will update every 2 minutes');
+    
+    // 2. Refresh link ThapcamTV: Mỗi 30 phút (chỉ lấy link mới từ bit.ly)
+    setInterval(getThapcamLink, 30 * 60 * 1000);
+    console.log('🔗 ThapcamTV link will refresh every 30 minutes');
+    
+    // 3. Memory check: Mỗi 5 phút
     setInterval(checkMemoryAndRestart, 5 * 60 * 1000);
+    console.log('💾 Memory check every 5 minutes');
     
     app.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
