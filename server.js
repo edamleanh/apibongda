@@ -184,6 +184,8 @@ async function scrapeMatches() {
         const match = {
           homeTeam: '',
           awayTeam: '',
+          homeTeamLogo: '',
+          awayTeamLogo: '',
           time: '',
           date: '',
           timeOnly: '',
@@ -235,16 +237,49 @@ async function scrapeMatches() {
           // Parse team names từ alt attributes của images
           const teamImages = container.querySelectorAll('img[alt]');
           const teamNames = [];
+          const teamLogos = [];
+          
           teamImages.forEach(img => {
             const alt = img.getAttribute('alt');
             if (alt && alt !== 'live' && alt !== 'xay-con-avatar' && !alt.includes('ic_')) {
               teamNames.push(alt.trim());
+              
+              // ✅ Extract logo URL
+              let logoUrl = '';
+              
+              // Try srcset first (better quality)
+              const srcset = img.getAttribute('srcset');
+              if (srcset) {
+                // srcset format: "/_next/image?url=https%3A%2F%2F...&w=32&q=75 1x, /_next/image?url=...&w=64&q=75 2x"
+                const srcsetMatch = srcset.match(/url=([^&\s]+)/);
+                if (srcsetMatch) {
+                  logoUrl = decodeURIComponent(srcsetMatch[1]);
+                }
+              }
+              
+              // Fallback to src
+              if (!logoUrl) {
+                const src = img.getAttribute('src');
+                if (src) {
+                  // Extract from Next.js image optimization URL
+                  const srcMatch = src.match(/url=([^&\s]+)/);
+                  if (srcMatch) {
+                    logoUrl = decodeURIComponent(srcMatch[1]);
+                  } else {
+                    logoUrl = src; // Direct URL
+                  }
+                }
+              }
+              
+              teamLogos.push(logoUrl);
             }
           });
           
           if (teamNames.length >= 2) {
             match.homeTeam = teamNames[0];
             match.awayTeam = teamNames[1];
+            match.homeTeamLogo = teamLogos[0] || '';
+            match.awayTeamLogo = teamLogos[1] || '';
           }
           
           // Fallback: parse team names từ text
@@ -336,6 +371,8 @@ async function scrapeMatches() {
         const match = {
           homeTeam: '',
           awayTeam: '',
+          homeTeamLogo: '',
+          awayTeamLogo: '',
           time: '',           // Thời gian đầy đủ (ngày + giờ)
           date: '',           // Chỉ ngày
           timeOnly: '',       // Chỉ giờ
@@ -527,6 +564,8 @@ async function scrapeMatches() {
                     id: matchElements.length + 1,
                     homeTeam: parsedMatch.homeTeam,
                     awayTeam: parsedMatch.awayTeam,
+                    homeTeamLogo: parsedMatch.homeTeamLogo || '',
+                    awayTeamLogo: parsedMatch.awayTeamLogo || '',
                     time: parsedMatch.time,           // Thời gian đầy đủ
                     date: parsedMatch.date,           // Chỉ ngày
                     timeOnly: parsedMatch.timeOnly,   // Chỉ giờ
@@ -565,6 +604,8 @@ async function scrapeMatches() {
                 id: matchElements.length + 1,
                 homeTeam: parsedMatch.homeTeam,
                 awayTeam: parsedMatch.awayTeam,
+                homeTeamLogo: parsedMatch.homeTeamLogo || '',
+                awayTeamLogo: parsedMatch.awayTeamLogo || '',
                 time: parsedMatch.time,
                 date: parsedMatch.date,
                 timeOnly: parsedMatch.timeOnly,
