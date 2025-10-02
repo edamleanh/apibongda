@@ -26,7 +26,7 @@ async function ensureChromeInstalled() {
     console.log('⚠️ Chrome not found, installing...');
   }
 
-  
+
   // Install Chrome if not found
   try {
     console.log('📦 Installing Chrome via Puppeteer...');
@@ -85,7 +85,7 @@ async function getBrowser() {
   return globalBrowser;
 }
 
-// Hàm scrape dữ liệu từ xaycon.live
+// Hàm scrape dữ liệu từ ThapcamTV
 async function scrapeMatches() {
   let page;
   try {
@@ -98,28 +98,69 @@ async function scrapeMatches() {
     // Thiết lập User-Agent để tránh bị block
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
-    console.log('Navigating to xaycon.live...');
-    await page.goto('https://xaycon.live', { 
+    // ===== BƯỚC 1: Truy cập bit.ly/tiengruoi =====
+    console.log('Step 1: Navigating to bit.ly/tiengruoi...');
+    await page.goto('https://bit.ly/tiengruoi', { 
       waitUntil: 'networkidle0',
       timeout: 30000 
     });
     
-    // Chờ 5 giây để trang load đầy đủ
-    console.log('Waiting 5 seconds for page to fully load...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Chờ page load
+    await wait(3000);
     
-    console.log('Extracting match data...');
+    // ===== BƯỚC 2: Tìm link ThapcamTV =====
+    console.log('Step 2: Finding ThapcamTV link...');
+    await page.waitForSelector('.group-link', { timeout: 10000 });
+    
+    const thapcamLink = await page.evaluate(() => {
+      const groupLinks = document.querySelectorAll('.group-link');
+      for (let group of groupLinks) {
+        const textSpan = group.querySelector('span.text');
+        if (textSpan && textSpan.textContent.includes('ThapcamTV')) {
+          const link = group.querySelector('a.ref-link');
+          if (link && link.href) {
+            return link.href;
+          }
+        }
+      }
+      return null;
+    });
+    
+    if (!thapcamLink) {
+      throw new Error('ThapcamTV link not found on page');
+    }
+    
+    console.log('Found ThapcamTV link:', thapcamLink);
+    
+    // ===== BƯỚC 3: Thêm /football vào URL =====
+    const footballUrl = thapcamLink.endsWith('/') 
+      ? thapcamLink + 'football' 
+      : thapcamLink + '/football';
+    
+    console.log('Step 3: Navigating to football page:', footballUrl);
+    
+    // ===== BƯỚC 4: Truy cập trang football =====
+    await page.goto(footballUrl, { 
+      waitUntil: 'networkidle0',
+      timeout: 30000 
+    });
+    
+    // Chờ trang load đầy đủ
+    console.log('Step 4: Waiting for football page to load...');
+    await wait(5000);
+    
+    console.log('Step 5: Extracting LIVE match data...');
     
     // Chờ thêm để đảm bảo JavaScript render xong
     try {
-      await page.waitForSelector('div[class*="bg-match-card"], [class*="match"]', { timeout: 10000 });
+      await page.waitForSelector('[class*="match"], [class*="live"], [class*="game"]', { timeout: 10000 });
       console.log('Match elements detected, waiting 2 more seconds...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await wait(2000);
     } catch (e) {
       console.log('No specific match elements found, proceeding with general scraping...');
     }
     
-    // Scrape dữ liệu các trận đấu với parsing chi tiết
+    // ===== BƯỚC 5: Scrape LIVE matches từ football page =====
     const matches = await page.evaluate(() => {
       const matchElements = [];
       
@@ -634,16 +675,22 @@ async function scrapeMatches() {
         }
       });
       
-      return uniqueMatches;
+      // ✅ CHỈ LẤY LIVE MATCHES
+      const liveMatches = uniqueMatches.filter(match => 
+        match.status && match.status.toLowerCase().includes('live')
+      );
+      
+      return liveMatches;
     });
     
-    console.log(`Found ${matches.length} matches`);
+    console.log(`Found ${matches.length} LIVE matches`);
     
     return {
       success: true,
       matches: matches,
       scrapedAt: new Date().toISOString(),
-      totalMatches: matches.length
+      totalMatches: matches.length,
+      source: 'ThapcamTV'
     };
     
   } catch (error) {
@@ -710,10 +757,12 @@ function checkMemoryAndRestart() {
 // Routes
 app.get('/', (req, res) => {
   res.json({
-    message: 'Xaycon.live Scraper API - Memory Optimized Edition',
-    version: '2.0.0',
+    message: 'ThapcamTV Football Scraper API - LIVE Matches Only',
+    version: '3.0.0',
+    source: 'ThapcamTV via bit.ly/tiengruoi',
     features: [
-      'Detailed match parsing (home/away teams, time, league, status)',
+      '🔴 LIVE matches only (filtered)',
+      'Detailed match parsing (home/away teams, time, league, status, BLV, logos)',
       'Auto-refresh every 2 minutes (optimized for RAM)',
       'Browser pooling to prevent memory leaks',
       'Auto memory check every 5 minutes',
@@ -721,29 +770,21 @@ app.get('/', (req, res) => {
       'Advanced filtering and search'
     ],
     endpoints: {
-      '/api/matches': 'Get all match data with detailed parsing',
-      '/api/matches/live': 'Get live matches only',
-      '/api/matches/today': 'Get today\'s matches',
-      '/api/matches/by-league/{league}': 'Get matches by league name',
-      '/api/matches/date/{date}': 'Get matches by date (format: DD/MM or DD/MM/YYYY)',
-      '/api/search/{team}': 'Search matches by team name',
-      '/api/match/{slug}': 'Get specific match by slug (partial match)',
-      '/api/match-by-url?url={fullUrl}': 'Get specific match by full URL',
+      '/api/matches': 'Get all LIVE match data',
+      '/api/matches/live': 'Get live matches (same as /api/matches)',
+      '/api/matches/by-league/{league}': 'Get LIVE matches by league name',
+      '/api/search/{team}': 'Search LIVE matches by team name',
       '/api/status': 'Get API status and statistics',
       '/api/refresh': 'Force refresh data',
       '/api/debug': 'Debug information and parsing sources'
     },
     examples: {
-      'All matches': '/api/matches',
+      'All LIVE matches': '/api/matches',
       'Live matches': '/api/matches/live',
-      'Today matches': '/api/matches/today',
-      'Premier League': '/api/matches/by-league/premier',
-      'Date 02/10': '/api/matches/date/02/10',
-      'Search Barcelona': '/api/search/barcelona',
-      'Match by slug': '/api/match/saint-gilloise-vs-newcastle-united',
-      'Match by full URL': '/api/match-by-url?url=https://www.xaycon.live/truc-tiep/saint-gilloise-vs-newcastle-united-23-45-01-10-2025'
+      'Premier League LIVE': '/api/matches/by-league/premier',
+      'Search Barcelona': '/api/search/barcelona'
     },
-    documentation: 'https://chatgpt.com/share/68dd6ac7-edd4-800e-9394-5581a80ca0f4'
+    documentation: 'https://github.com/edamleanh/apibongda'
   });
 });
 
