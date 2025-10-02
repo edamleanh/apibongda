@@ -189,6 +189,7 @@ async function scrapeMatches() {
           timeOnly: '',
           league: '',
           status: '',
+          blv: '',
           rawText: container.innerText || container.textContent || ''
         };
         
@@ -280,6 +281,46 @@ async function scrapeMatches() {
             match.status = 'LIVE';
           }
           
+          // ✅ Parse BLV (Bình Luận Viên) - Tên xuất hiện cạnh avatar "xay-con-avatar"
+          const blvElements = container.querySelectorAll('.text-primary.font-bold');
+          blvElements.forEach(el => {
+            const text = el.textContent?.trim() || '';
+            // BLV thường là text ngắn, viết hoa, không chứa số hay ký tự đặc biệt giải đấu
+            if (text.length > 2 && text.length < 30 && 
+                !text.match(/\d{1,2}:\d{2}/) && 
+                !text.match(/\d{1,2}\/\d{1,2}/) &&
+                text !== match.homeTeam && 
+                text !== match.awayTeam && 
+                text !== match.league &&
+                text !== 'LIVE' &&
+                !text.includes('Nhận Km') &&
+                !text.includes('Đang diễn ra')) {
+              // Check nếu element này ở gần avatar image
+              const parent = el.closest('.bg-brand');
+              if (parent) {
+                const hasAvatar = parent.querySelector('img[alt="xay-con-avatar"]');
+                if (hasAvatar) {
+                  match.blv = text;
+                }
+              }
+            }
+          });
+          
+          // Fallback: Tìm BLV từ rawText (thường là dòng cuối)
+          if (!match.blv && match.rawText) {
+            const lines = match.rawText.split('\n').map(l => l.trim()).filter(l => l);
+            const lastLine = lines[lines.length - 1];
+            // BLV thường là dòng cuối, viết hoa, không chứa số
+            if (lastLine && lastLine.length < 30 && 
+                !lastLine.match(/\d/) && 
+                lastLine !== 'Nhận Km' &&
+                lastLine !== 'Đang diễn ra' &&
+                lastLine !== match.homeTeam &&
+                lastLine !== match.awayTeam) {
+              match.blv = lastLine;
+            }
+          }
+          
         } catch (e) {
           console.log('Error parsing xaycon match:', e);
         }
@@ -300,6 +341,7 @@ async function scrapeMatches() {
           timeOnly: '',       // Chỉ giờ
           league: '',
           status: '',
+          blv: '',            // ✅ Bình Luận Viên
           rawText: text.trim()
         };
         
@@ -490,6 +532,7 @@ async function scrapeMatches() {
                     timeOnly: parsedMatch.timeOnly,   // Chỉ giờ
                     league: parsedMatch.league,
                     status: parsedMatch.status,
+                    blv: parsedMatch.blv || '',       // ✅ Bình Luận Viên
                     link: parsedMatch.link,           // Link slug
                     rawText: parsedMatch.rawText,
                     html: container.innerHTML,
@@ -527,6 +570,7 @@ async function scrapeMatches() {
                 timeOnly: parsedMatch.timeOnly,
                 league: parsedMatch.league,
                 status: parsedMatch.status,
+                blv: parsedMatch.blv || '',       // ✅ Bình Luận Viên
                 link: parsedMatch.link,
                 rawText: parsedMatch.rawText,
                 timestamp: new Date().toISOString()
