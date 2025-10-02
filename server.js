@@ -48,10 +48,7 @@ const getBrowserConfig = () => {
 async function getBrowser() {
   if (!globalBrowser || !globalBrowser.isConnected()) {
     console.log('Creating new browser instance...');
-    const config = getBrowserConfig();
-    // Force Puppeteer to use bundled Chrome instead of system Chrome
-    config.executablePath = puppeteer.executablePath();
-    globalBrowser = await puppeteer.launch(config);
+    globalBrowser = await puppeteer.launch(getBrowserConfig());
   }
   return globalBrowser;
 }
