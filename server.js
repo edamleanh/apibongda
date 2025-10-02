@@ -272,13 +272,13 @@ async function scrapeMatches() {
           statusElements.forEach(el => {
             const text = el.textContent || '';
             if (text.includes('LIVE') || text.includes('Đang diễn ra')) {
-              match.status = 'LIVE';
+              match.status = 'live';
             }
           });
           
           // Fallback status detection
           if (!match.status && match.rawText.toLowerCase().includes('live')) {
-            match.status = 'LIVE';
+            match.status = 'live';
           }
           
           // ✅ Parse BLV (Bình Luận Viên) - Tên xuất hiện cạnh avatar "xay-con-avatar"
