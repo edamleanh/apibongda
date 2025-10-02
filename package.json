@@ -7,8 +7,7 @@
     "start": "node --expose-gc server.js",
     "start:no-gc": "node server.js",
     "dev": "nodemon --expose-gc server.js",
-    "test": "node test-api.js",
-    "postinstall": "npx puppeteer browsers install chrome || echo 'Chrome installation skipped'"
+    "test": "node test-api.js"
   },
   "keywords": [
     "scraper",
