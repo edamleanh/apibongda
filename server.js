@@ -3,12 +3,43 @@ const express = require('express');
 const puppeteer = require('puppeteer');
 const cors = require('cors');
 const helmet = require('helmet');
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ✅ THÊM HELPER FUNCTION NÀY
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// ✅ Function to ensure Chrome is installed
+async function ensureChromeInstalled() {
+  try {
+    // Check if Chrome already exists
+    const chromePath = puppeteer.executablePath();
+    if (fs.existsSync(chromePath)) {
+      console.log('✅ Chrome already installed at:', chromePath);
+      return true;
+    }
+  } catch (error) {
+    console.log('⚠️ Chrome not found, installing...');
+  }
+
+  // Install Chrome if not found
+  try {
+    console.log('📦 Installing Chrome via Puppeteer...');
+    execSync('npx puppeteer browsers install chrome', { 
+      stdio: 'inherit',
+      timeout: 120000 // 2 minutes timeout
+    });
+    console.log('✅ Chrome installation complete!');
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to install Chrome:', error.message);
+    return false;
+  }
+}
 
 // ✅ THÊM: Browser Pool - Biến global để lưu browser instance
 let globalBrowser = null;
@@ -854,6 +885,14 @@ app.use((req, res) => {
 // Khởi tạo server
 async function startServer() {
   try {
+    // ✅ Ensure Chrome is installed before starting
+    console.log('🔍 Checking Chrome installation...');
+    const chromeInstalled = await ensureChromeInstalled();
+    if (!chromeInstalled) {
+      console.error('❌ Cannot start server: Chrome installation failed');
+      process.exit(1);
+    }
+    
     // Cập nhật dữ liệu lần đầu
     await updateData();
     
