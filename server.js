@@ -10,7 +10,9 @@ const PORT = process.env.PORT || 3000;
 // ✅ THÊM HELPER FUNCTION NÀY
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// ...existing code...
+// ✅ THÊM: Browser Pool - Biến global để lưu browser instance
+let globalBrowser = null;
+
 // Middleware
 app.use(helmet());
 app.use(cors());
@@ -42,14 +44,24 @@ const getBrowserConfig = () => {
   return { headless: 'new' };
 };
 
+// ✅ Hàm lấy hoặc tạo browser (reuse thay vì tạo mới mỗi lần)
+async function getBrowser() {
+  if (!globalBrowser || !globalBrowser.isConnected()) {
+    console.log('Creating new browser instance...');
+    globalBrowser = await puppeteer.launch(getBrowserConfig());
+  }
+  return globalBrowser;
+}
+
 // Hàm scrape dữ liệu từ xaycon.live
 async function scrapeMatches() {
-  let browser;
+  let page;
   try {
-    console.log('Starting browser...');
-    browser = await puppeteer.launch(getBrowserConfig());
+    console.log('Starting scrape...');
     
-    const page = await browser.newPage();
+    // ✅ REUSE browser thay vì tạo mới
+    const browser = await getBrowser();
+    page = await browser.newPage();
     
     // Thiết lập User-Agent để tránh bị block
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
@@ -526,8 +538,9 @@ async function scrapeMatches() {
       scrapedAt: new Date().toISOString()
     };
   } finally {
-    if (browser) {
-      await browser.close();
+    // ✅ CHỈ ĐÓNG PAGE, KHÔNG ĐÓNG BROWSER (để reuse)
+    if (page) {
+      await page.close();
     }
   }
 }
@@ -550,16 +563,44 @@ async function updateData() {
     cachedData.error = result.error;
     console.error('Failed to update data:', result.error);
   }
+  
+  // ✅ FORCE GARBAGE COLLECTION để giải phóng RAM
+  if (global.gc) {
+    console.log('Running garbage collection...');
+    global.gc();
+  }
+  
+  // ✅ Log RAM usage để monitor
+  const memUsage = process.memoryUsage();
+  console.log(`Memory: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`);
+}
+
+// ✅ Hàm check memory và restart nếu cần
+function checkMemoryAndRestart() {
+  const memUsage = process.memoryUsage();
+  const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+  
+  console.log(`Memory check: ${heapUsedMB}MB / ${heapTotalMB}MB`);
+  
+  // ✅ Nếu dùng trên 400MB RAM, restart process
+  if (heapUsedMB > 400) {
+    console.log('⚠️ HIGH MEMORY USAGE! Restarting process...');
+    process.exit(1); // Railway/Render sẽ tự động restart
+  }
 }
 
 // Routes
 app.get('/', (req, res) => {
   res.json({
-    message: 'Xaycon.live Scraper API - Enhanced Version',
-    version: '1.1.0',
+    message: 'Xaycon.live Scraper API - Memory Optimized Edition',
+    version: '2.0.0',
     features: [
       'Detailed match parsing (home/away teams, time, league, status)',
-      'Auto-refresh every 60 seconds',
+      'Auto-refresh every 2 minutes (optimized for RAM)',
+      'Browser pooling to prevent memory leaks',
+      'Auto memory check every 5 minutes',
+      'Browser restart every 4 hours',
       'Advanced filtering and search'
     ],
     endpoints: {
@@ -816,19 +857,50 @@ async function startServer() {
     // Cập nhật dữ liệu lần đầu
     await updateData();
     
-    // Thiết lập cập nhật tự động mỗi phút
-    setInterval(updateData, 60000); // 60 giây = 1 phút
+    // ✅ THAY ĐỔI: Scrape mỗi 2 PHÚT thay vì 1 phút (giảm RAM pressure)
+    setInterval(updateData, 120000); // 120 giây = 2 phút
+    
+    // ✅ Check memory mỗi 5 phút
+    setInterval(checkMemoryAndRestart, 300000); // 5 phút
+    
+    // ✅ Đóng và tạo lại browser mỗi 4 giờ để tránh memory leak
+    setInterval(async () => {
+      console.log('♻️  Restarting browser to free memory...');
+      if (globalBrowser) {
+        await globalBrowser.close();
+        globalBrowser = null;
+      }
+    }, 14400000); // 4 giờ = 14400000ms
     
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📊 API Status: http://localhost:${PORT}/api/status`);
       console.log(`⚽ Matches: http://localhost:${PORT}/api/matches`);
-      console.log(`🔄 Auto-refresh every 60 seconds`);
+      console.log(`🔄 Auto-refresh every 2 minutes (optimized for RAM)`);
+      console.log(`💾 Memory check every 5 minutes (auto-restart if > 400MB)`);
+      console.log(`♻️  Browser restart every 4 hours (prevent memory leak)`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
   }
 }
+
+// ✅ Graceful shutdown - Đóng browser khi process terminate
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, closing browser...');
+  if (globalBrowser) {
+    await globalBrowser.close();
+  }
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, closing browser...');
+  if (globalBrowser) {
+    await globalBrowser.close();
+  }
+  process.exit(0);
+});
 
 startServer();
