@@ -26,6 +26,7 @@ async function ensureChromeInstalled() {
     console.log('⚠️ Chrome not found, installing...');
   }
 
+  
   // Install Chrome if not found
   try {
     console.log('📦 Installing Chrome via Puppeteer...');
