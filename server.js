@@ -97,15 +97,15 @@ async function getThapcamLink() {
     
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
-    // Navigate to bit.ly
+    // ✅ Tăng timeout lên 60s và dùng domcontentloaded thay vì networkidle0
     await page.goto('https://bit.ly/tiengruoi', { 
-      waitUntil: 'networkidle0',
-      timeout: 30000 
+      waitUntil: 'domcontentloaded', // Nhẹ hơn networkidle0
+      timeout: 60000 // Tăng lên 60s
     });
-    await wait(3000);
+    await wait(5000); // Tăng wait time lên 5s
     
     // Find ThapcamTV link
-    await page.waitForSelector('.group-link', { timeout: 10000 });
+    await page.waitForSelector('.group-link', { timeout: 15000 });
     
     const thapcamLink = await page.evaluate(() => {
       const groupLinks = document.querySelectorAll('.group-link');
@@ -122,7 +122,18 @@ async function getThapcamLink() {
     });
     
     if (!thapcamLink) {
-      throw new Error('ThapcamTV link not found on page');
+      console.error('⚠️ ThapcamTV link not found on page');
+      // ✅ Fallback: Dùng link cũ nếu có
+      if (cachedThapcamLink) {
+        console.log('📌 Using previously cached link:', cachedThapcamLink);
+        return cachedThapcamLink;
+      }
+      // ✅ Fallback cuối cùng: Dùng link hard-coded (cập nhật link này nếu biết)
+      const fallbackLink = 'https://thapcam.tv'; // TODO: Cập nhật link này
+      console.log('📌 Using fallback link:', fallbackLink);
+      cachedThapcamLink = fallbackLink;
+      linkLastUpdated = Date.now();
+      return fallbackLink;
     }
     
     console.log('✅ Found ThapcamTV link:', thapcamLink);
@@ -134,9 +145,18 @@ async function getThapcamLink() {
     return thapcamLink;
     
   } catch (error) {
-    console.error('❌ Error fetching ThapcamTV link:', error);
+    console.error('❌ Error fetching ThapcamTV link:', error.message);
     // Nếu lỗi, vẫn dùng link cũ nếu có
-    return cachedThapcamLink;
+    if (cachedThapcamLink) {
+      console.log('📌 Using previously cached link after error:', cachedThapcamLink);
+      return cachedThapcamLink;
+    }
+    // ✅ Fallback cuối cùng
+    const fallbackLink = 'https://thapcam.tv';
+    console.log('📌 Using fallback link after error:', fallbackLink);
+    cachedThapcamLink = fallbackLink;
+    linkLastUpdated = Date.now();
+    return fallbackLink;
   } finally {
     if (page) {
       await page.close();
@@ -158,7 +178,13 @@ async function scrapeMatches() {
     }
     
     if (!cachedThapcamLink) {
-      throw new Error('Could not get ThapcamTV link');
+      console.error('❌ Could not get ThapcamTV link, skipping this scrape cycle');
+      return {
+        success: false,
+        error: 'No ThapcamTV link available',
+        matches: [],
+        scrapedAt: new Date().toISOString()
+      };
     }
     
     const browser = await getBrowser();
